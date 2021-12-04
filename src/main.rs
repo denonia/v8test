@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use rustyline::Editor;
 use v8;
 
@@ -23,6 +25,24 @@ fn log_callback(
     println!("{}", text);
 }
 
+fn get_callback(
+    scope: &mut v8::HandleScope,
+    args: v8::FunctionCallbackArguments,
+    mut m_return: v8::ReturnValue,
+) {
+    let text = args
+        .get(0)
+        .to_string(scope)
+        .unwrap()
+        .to_rust_string_lossy(scope);
+
+    let mut resp = reqwest::blocking::get(text).unwrap();
+    let mut body = String::new();
+    resp.read_to_string(&mut body).unwrap();
+
+    m_return.set(v8::String::new(scope, body.as_ref()).unwrap().into());
+}
+
 fn main() {
     let platform = v8::new_default_platform(0, false).make_shared();
     v8::V8::initialize_platform(platform);
@@ -35,6 +55,11 @@ fn main() {
     global.set(
         v8::String::new(scope, "log").unwrap().into(),
         v8::FunctionTemplate::new(scope, log_callback).into(),
+    );
+
+    global.set(
+        v8::String::new(scope, "get").unwrap().into(),
+        v8::FunctionTemplate::new(scope, get_callback).into(),
     );
 
     let ctx = v8::Context::new_from_template(scope, global);
